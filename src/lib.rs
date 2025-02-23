@@ -23,18 +23,23 @@ where
     SLEEP: AsyncFn() -> (),
 {
     loop {
-        let new_value = wait_until_not(not_pressed_value.clone()).await;
+        // Wait until the button is pressed (or not not pressed)
+        let pressed_value = wait_until_not(not_pressed_value.clone()).await;
 
-        let s = stable_wait();
-        let w = wait_until_not(new_value.clone());
-        futures::pin_mut!(s, w);
-        match futures::future::select(s, w).await {
+        // Create two futures, one for our stable wait completion and one
+        // for if the values changes.
+        let stable = stable_wait();
+        let no_longer_pressed = wait_until_not(pressed_value.clone());
+
+        futures::pin_mut!(stable, no_longer_pressed);
+        // Wait for either the stable wait to complete or the wait_until_not to complete
+        match futures::future::select(stable, no_longer_pressed).await {
             futures::future::Either::Left((_, _)) => {
                 // The sleep finished first, so we return the new value
-                return new_value;
+                return pressed_value;
             }
             futures::future::Either::Right((_, _)) => {
-                // The wait finished first, so we continue the loop
+                // it's no longer pressed, let it go around again.
             }
         }
     }
